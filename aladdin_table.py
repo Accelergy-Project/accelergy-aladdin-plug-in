@@ -118,7 +118,8 @@ class AladdinTable(AccelergyPlugIn):
     @staticmethod
     def query_csv_using_latency(interface, csv_file_path):
         # default latency for Aladdin estimation is
-        latency = interface['attributes']['latency'] if 'latency' in interface['attributes'] else 5
+        latency = interface['attributes']['cycle_time']
+        global_cycle_seconds = interface['attributes']['global_cycle_seconds']
         # round to an existing latency (can perform linear interpolation as well)
         if isinstance(latency, str) and 'ns' in latency:
             latency = math.ceil(float(latency.split('ns')[0]))
@@ -131,13 +132,19 @@ class AladdinTable(AccelergyPlugIn):
         elif latency > 6:
             latency = 6
         # there are only two types of energy in Aladdin tables
-        action_name = 'idle energy(pJ)' if interface['action_name'] == 'idle' else 'dynamic energy(pJ)'
+        action_name = 'idle energy(pJ)' if interface['action_name'] == 'leak' else 'dynamic energy(pJ)'
         with open(csv_file_path) as csv_file:
             reader = csv.DictReader(csv_file)
-            for row in reader:
+            rows = [row for row in reader]
+            for row in rows:
                 if row['latency(ns)'] == str(latency):
                     energy = float(row[action_name])
                     break
+            else:
+                energy = float(rows[0][action_name])
+                latency = float(rows[0]['latency(ns)'])
+        if interface['action_name'] == 'leak':
+            energy *= global_cycle_seconds / latency * 1e9
         return energy
 
     def SRAM_estimate_energy(self, interface):
@@ -152,12 +159,12 @@ class AladdinTable(AccelergyPlugIn):
             return 0
         action_name = interface['action_name']
 
-        if action_name == 'idle':
+        if action_name == 'leak':
             reg_interface = deepcopy(interface)
             reg_energy = AladdinTable.query_csv_using_latency(
                 reg_interface, csv_file_path)
             comparator_interface = {'attributes': {'datawidth': math.ceil(math.log2(float(depth)))},
-                                    'action_name': 'idle'}
+                                    'action_name': 'leak'}
             comparator_energy = self.comparator_estimate_energy(
                 comparator_interface)
         else:
@@ -174,11 +181,11 @@ class AladdinTable(AccelergyPlugIn):
 
             reg_interface = deepcopy(interface)
             if data_delta == 0:
-                reg_interface['action_name'] = 'idle'
+                reg_interface['action_name'] = 'leak'
             reg_energy = AladdinTable.query_csv_using_latency(
                 reg_interface, csv_file_path)
             if address_delta == 0:
-                comp_action = 'idle'
+                comp_action = 'leak'
             else:
                 comp_action = action_name
             comparator_interface = {'attributes': {'datawidth': math.ceil(math.log2(float(depth)))},
@@ -207,8 +214,8 @@ class AladdinTable(AccelergyPlugIn):
         reg_energy = AladdinTable.query_csv_using_latency(
             interface, csv_file_path)
 
-        if interface['action_name'] == 'idle':
-            action_name = 'idle'
+        if interface['action_name'] == 'leak':
+            action_name = 'leak'
         else:
             action_name = 'access'
 
@@ -286,8 +293,8 @@ class AladdinTable(AccelergyPlugIn):
             multiplier_interface['action_name'] = 'mult_gated'
         elif interface['action_name'] == 'mac_reused':
             multiplier_interface['action_name'] = 'mult_reused'
-        elif interface['action_name'] == 'idle':
-            multiplier_interface['action_name'] = 'idle'
+        elif interface['action_name'] == 'leak':
+            multiplier_interface['action_name'] = 'leak'
         else:
             multiplier_interface['action_name'] = 'mult_random'
         adder_energy = self.intadder_estimate_energy(interface)
@@ -303,8 +310,8 @@ class AladdinTable(AccelergyPlugIn):
             multiplier_interface['action_name'] = 'mult_gated'
         elif interface['action_name'] == 'mac_reused':
             multiplier_interface['action_name'] = 'mult_reused'
-        elif interface['action_name'] == 'idle':
-            multiplier_interface['action_name'] = 'idle'
+        elif interface['action_name'] == 'leak':
+            multiplier_interface['action_name'] = 'leak'
         else:
             multiplier_interface['action_name'] = 'mult_random'
         fpadder_energy = self.fpadder_estimate_energy(interface)
@@ -346,7 +353,7 @@ class AladdinTable(AccelergyPlugIn):
         action_name = interface['action_name']
         if action_name == 'mult_gated':
             # reflect gated multiplier energy
-            interface['action_name'] = 'idle'
+            interface['action_name'] = 'leak'
         csv_nbit = 32
         csv_file_path = os.path.join(this_dir, 'data/multiplier.csv')
         energy = AladdinTable.query_csv_using_latency(interface, csv_file_path)
@@ -363,7 +370,7 @@ class AladdinTable(AccelergyPlugIn):
         action_name = interface['action_name']
         if action_name == 'mult_gated':
             # reflect gated multiplier energy
-            interface['action_name'] = 'idle'
+            interface['action_name'] = 'leak'
         nbit_exponent = interface['attributes']['exponent']
         nbit_mantissa = interface['attributes']['mantissa']
         nbit = nbit_mantissa + nbit_exponent
