@@ -118,8 +118,8 @@ class AladdinTable(AccelergyPlugIn):
     @staticmethod
     def query_csv_using_latency(interface, csv_file_path):
         # default latency for Aladdin estimation is
-        latency = interface['attributes']['cycle_time']
         global_cycle_seconds = interface['attributes']['global_cycle_seconds']
+        latency = global_cycle_seconds * interface['arguments']['action_latency_cycles']
         # round to an existing latency (can perform linear interpolation as well)
         if isinstance(latency, str) and 'ns' in latency:
             latency = math.ceil(float(latency.split('ns')[0]))
@@ -163,8 +163,13 @@ class AladdinTable(AccelergyPlugIn):
             reg_interface = deepcopy(interface)
             reg_energy = AladdinTable.query_csv_using_latency(
                 reg_interface, csv_file_path)
-            comparator_interface = {'attributes': {'datawidth': math.ceil(math.log2(float(depth)))},
-                                    'action_name': 'leak'}
+            comparator_interface = {'name': 'comparator',
+                                    'attributes': 
+                                        {**interface['attributes'], 
+                                         **{'datawidth': math.ceil(math.log2(float(depth)))}},
+                                    'action_name': 'leak',
+                                    'arguments': interface['arguments']
+                                    }
             comparator_energy = self.comparator_estimate_energy(
                 comparator_interface)
         else:
@@ -184,14 +189,18 @@ class AladdinTable(AccelergyPlugIn):
                 reg_interface['action_name'] = 'leak'
             reg_energy = AladdinTable.query_csv_using_latency(
                 reg_interface, csv_file_path)
-            if address_delta == 0:
-                comp_action = 'leak'
-            else:
+            if address_delta != 0:
                 comp_action = action_name
-            comparator_interface = {'attributes': {'datawidth': math.ceil(math.log2(float(depth)))},
-                                    'action_name': comp_action}
-            comparator_energy = self.comparator_estimate_energy(
-                comparator_interface)
+                comparator_interface = {'name': 'comparator',
+                                        'attributes': 
+                                            {**interface['attributes'], 
+                                            **{'datawidth': math.ceil(math.log2(float(depth)))}},
+                                        'action_name': comp_action,
+                                    'arguments': interface['arguments']}
+                comparator_energy = self.comparator_estimate_energy(
+                    comparator_interface)
+            else:
+                comparator_energy = 0
         # register file access is naively modeled as vector access of registers
         reg_file_energy = reg_energy * width + comparator_energy * depth
         return reg_file_energy
