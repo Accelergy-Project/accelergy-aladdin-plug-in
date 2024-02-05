@@ -175,7 +175,7 @@ class AladdinTable(AccelergyPlugIn):
         else:
 
             if (interface['arguments'] is not None):
-                data_delta = interface['arguments']['data_delta']
+                data_delta = interface['arguments'].get('data_delta', 1)
             else:
                 data_delta = 1
 
@@ -186,9 +186,10 @@ class AladdinTable(AccelergyPlugIn):
 
             reg_interface = deepcopy(interface)
             if data_delta == 0:
-                reg_interface['action_name'] = 'leak'
-            reg_energy = AladdinTable.query_csv_using_latency(
-                reg_interface, csv_file_path)
+                reg_energy = 0
+            else:
+                reg_energy = AladdinTable.query_csv_using_latency(
+                    reg_interface, csv_file_path)
             if address_delta != 0:
                 comp_action = action_name
                 comparator_interface = {'name': 'comparator',
