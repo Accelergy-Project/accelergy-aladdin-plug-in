@@ -180,7 +180,7 @@ class AladdinTable(AccelergyPlugIn):
                 data_delta = 1
 
             if (interface['arguments'] is not None):
-                address_delta = interface['arguments']['address_delta']
+                address_delta = interface['arguments'].get('address_delta', 1)
             else:
                 address_delta = 1
 
