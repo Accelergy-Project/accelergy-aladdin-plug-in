@@ -189,7 +189,7 @@ class AladdinTable(AccelergyPlugIn):
                 energy = float(rows[0][action_name])
                 latency = float(rows[0]["latency(ns)"]) * 1e-9
         if interface["action_name"] == "leak":
-            energy *= global_cycle_seconds
+            energy *= global_cycle_seconds / latency
         return energy
 
     def SRAM_estimate_energy(self, interface):
