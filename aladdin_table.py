@@ -255,7 +255,7 @@ class AladdinTable(AccelergyPlugIn):
             else:
                 comparator_energy = 0
         # register file access is naively modeled as vector access of registers
-        reg_file_energy = reg_energy * width + comparator_energy * depth
+        reg_file_energy = reg_energy + comparator_energy * depth
         return reg_file_energy
 
     def reg_estimate_energy(self, interface):
@@ -263,7 +263,7 @@ class AladdinTable(AccelergyPlugIn):
         csv_file_path = os.path.join(this_dir, "data/reg.csv")
         reg_interface = deepcopy(interface)
         reg_energy = AladdinTable.query_csv_using_latency(reg_interface, csv_file_path)
-        return reg_energy
+        return reg_energy * interface["attributes"]["width"]
 
     def FIFO_estimate_energy(self, interface):
         datawidth = interface["attributes"]["width"]
@@ -453,7 +453,7 @@ class AladdinTable(AccelergyPlugIn):
         this_dir, this_filename = os.path.split(__file__)
         csv_file_path = os.path.join(this_dir, "data/bitwise.csv")
         csv_energy = AladdinTable.query_csv_using_latency(interface, csv_file_path)
-        return csv_energy
+        return csv_energy * interface["attributes"]["width"]
 
     def get_supported_components(self) -> List[SupportedComponent]:
         components = {
@@ -549,7 +549,7 @@ class AladdinAreaQueires:
         }
         comparator_area = self.comparator_estimate_area(comparator_interface)
         # register file access is naively modeled as vector access of registers
-        reg_file_area = reg_area * width + comparator_area * depth
+        reg_file_area = reg_area + comparator_area * depth
         return reg_file_area
 
     def reg_estimate_area(self, interface):
@@ -559,7 +559,7 @@ class AladdinAreaQueires:
         reg_area = AladdinAreaQueires.query_csv_area_using_latency(
             reg_interface, csv_file_path
         )
-        return reg_area
+        return reg_area * interface["attributes"]["width"]
 
     def FIFO_estimate_area(self, interface):
         datawidth = interface["attributes"]["width"]
@@ -692,4 +692,4 @@ class AladdinAreaQueires:
         csv_area = AladdinAreaQueires.query_csv_area_using_latency(
             interface, csv_file_path
         )
-        return csv_area
+        return csv_area * interface["attributes"]["width"]
