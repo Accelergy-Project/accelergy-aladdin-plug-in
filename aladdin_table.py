@@ -7,6 +7,11 @@ from accelergy.helper_functions import (
     oneD_linear_interpolation,
     oneD_quadratic_interpolation,
 )
+from accelergy.plug_in_interface.estimator_wrapper import (
+    SupportedComponent,
+    PrintableCall,
+)
+
 from copy import deepcopy
 from accelergy.plug_in_interface.interface import *
 
@@ -100,8 +105,8 @@ class AladdinTable(AccelergyPlugIn):
 
     def estimate_energy(self, query: AccelergyQuery) -> Estimation:
         class_name = query.class_name
-        if "datawidth" not in query.class_attrs and "width" in query.class_attrs:
-            query.class_attrs["datawidth"] = query.class_attrs["width"]
+        if "width" not in query.class_attrs and "width" in query.class_attrs:
+            query.class_attrs["width"] = query.class_attrs["width"]
         # Legacy interface dictionary has keys class_name, attributes, action_name, and arguments
         interface = query.to_legacy_interface_dict()
 
@@ -111,8 +116,8 @@ class AladdinTable(AccelergyPlugIn):
 
     def primitive_area_supported(self, query: AccelergyQuery) -> AccuracyEstimation:
         class_name = query.class_name
-        if "datawidth" not in query.class_attrs and "width" in query.class_attrs:
-            query.class_attrs["datawidth"] = query.class_attrs["width"]
+        if "width" not in query.class_attrs and "width" in query.class_attrs:
+            query.class_attrs["width"] = query.class_attrs["width"]
         # Legacy interface dictionary has keys class_name, attributes, action_name, and arguments
         interface = query.to_legacy_interface_dict()
 
@@ -182,9 +187,9 @@ class AladdinTable(AccelergyPlugIn):
                     break
             else:
                 energy = float(rows[0][action_name])
-                latency = float(rows[0]["latency(ns)"])
+                latency = float(rows[0]["latency(ns)"]) * 1e-9
         if interface["action_name"] == "leak":
-            energy *= global_cycle_seconds / latency * 1e9
+            energy *= global_cycle_seconds / latency
         return energy
 
     def SRAM_estimate_energy(self, interface):
@@ -208,7 +213,7 @@ class AladdinTable(AccelergyPlugIn):
                 "name": "comparator",
                 "attributes": {
                     **interface["attributes"],
-                    **{"datawidth": math.ceil(math.log2(float(depth)))},
+                    **{"width": math.ceil(math.log2(float(depth)))},
                 },
                 "action_name": "leak",
                 "arguments": interface["arguments"],
@@ -239,7 +244,7 @@ class AladdinTable(AccelergyPlugIn):
                     "name": "comparator",
                     "attributes": {
                         **interface["attributes"],
-                        **{"datawidth": math.ceil(math.log2(float(depth)))},
+                        **{"width": math.ceil(math.log2(float(depth)))},
                     },
                     "action_name": comp_action,
                     "arguments": interface["arguments"],
@@ -261,7 +266,7 @@ class AladdinTable(AccelergyPlugIn):
         return reg_energy
 
     def FIFO_estimate_energy(self, interface):
-        datawidth = interface["attributes"]["datawidth"]
+        datawidth = interface["attributes"]["width"]
         depth = interface["attributes"]["depth"]
         if depth == 0:
             return 0
@@ -275,7 +280,7 @@ class AladdinTable(AccelergyPlugIn):
             action_name = "access"
 
         comparator_interface = {
-            "attributes": {"datawidth": math.log2(float(depth))},
+            "attributes": {"width": math.log2(float(depth))},
             "action_name": action_name,
         }
         comparator_energy = self.comparator_estimate_energy(comparator_interface)
@@ -285,7 +290,7 @@ class AladdinTable(AccelergyPlugIn):
     def crossbar_estimate_energy(self, interface):
         n_inputs = interface["attributes"]["n_inputs"]
         n_outputs = interface["attributes"]["n_outputs"]
-        datawidth = interface["attributes"]["datawidth"]
+        datawidth = interface["attributes"]["width"]
         this_dir, this_filename = os.path.split(__file__)
         csv_file_path = os.path.join(this_dir, "data/crossbar.csv")
         csv_energy = AladdinTable.query_csv_using_latency(interface, csv_file_path)
@@ -321,7 +326,7 @@ class AladdinTable(AccelergyPlugIn):
                     )
                     length_um = 0
 
-            datawidth = interface["attributes"]["datawidth"]
+            datawidth = interface["attributes"]["width"]
             C_per_um = 1.627 * 10**-15  # F per um
             VDD = 1
             alpha = 0.2
@@ -332,7 +337,7 @@ class AladdinTable(AccelergyPlugIn):
             return 0
 
     def comparator_estimate_energy(self, interface):
-        datawidth = interface["attributes"]["datawidth"]
+        datawidth = interface["attributes"]["width"]
         this_dir, this_filename = os.path.split(__file__)
         csv_file_path = os.path.join(this_dir, "data/comparator.csv")
         csv_energy = AladdinTable.query_csv_using_latency(interface, csv_file_path)
@@ -373,7 +378,7 @@ class AladdinTable(AccelergyPlugIn):
 
     def intadder_estimate_energy(self, interface):
         this_dir, this_filename = os.path.split(__file__)
-        nbit = interface["attributes"]["datawidth"]
+        nbit = interface["attributes"]["width"]
         csv_nbit = 32
         csv_file_path = os.path.join(this_dir, "data/adder.csv")
         energy = AladdinTable.query_csv_using_latency(interface, csv_file_path)
@@ -403,7 +408,7 @@ class AladdinTable(AccelergyPlugIn):
 
     def intmultiplier_estimate_energy(self, interface):
         this_dir, this_filename = os.path.split(__file__)
-        nbit = interface["attributes"]["datawidth"]
+        nbit = interface["attributes"]["width"]
         action_name = interface["action_name"]
         if action_name == "mult_gated":
             # reflect gated multiplier energy
@@ -449,6 +454,37 @@ class AladdinTable(AccelergyPlugIn):
         csv_file_path = os.path.join(this_dir, "data/bitwise.csv")
         csv_energy = AladdinTable.query_csv_using_latency(interface, csv_file_path)
         return csv_energy
+
+    def get_supported_components(self) -> List[SupportedComponent]:
+        components = {
+            "regfile": (["width", "depth"], ["leak", "access"]),
+            "SRAM": (["width", "depth"], ["leak", "access"]),
+            "counter": (["width"], ["leak", "access"]),
+            "comparator": (["width"], ["leak", "access"]),
+            "crossbar": (["n_inputs", "n_outputs", "width"], ["leak", "access"]),
+            "wire": (["length", "width"], ["transfer", "transfer_random"]),
+            "FIFO": (["width", "depth"], ["leak", "access"]),
+            "bitwise": (["width"], ["leak", "access"]),
+            "intadder": (["width"], ["leak", "access"]),
+            "intmultiplier": (["width"], ["leak", "access"]),
+            "intmac": (["width"], ["leak", "access"]),
+            "fpadder": (["exponent", "mantissa"], ["leak", "access"]),
+            "fpmultiplier": (["exponent", "mantissa"], ["leak", "access"]),
+            "fpmac": (["exponent", "mantissa"], ["leak", "access"]),
+            "reg": (["width"], ["leak", "access"]),
+        }
+        supported = []
+        for c, (attrs, actions) in components.items():
+            attrs = ["technology", "global_cycle_seconds"] + attrs
+            supported.append(
+                SupportedComponent(
+                    c,
+                    PrintableCall("", attrs),
+                    [PrintableCall(a) for a in actions],
+                )
+            )
+
+        return supported
 
 
 # --------------------------------------------------------------------------
@@ -509,7 +545,7 @@ class AladdinAreaQueires:
             reg_interface, csv_file_path
         )
         comparator_interface = {
-            "attributes": {"datawidth": math.ceil(math.log2(float(depth)))}
+            "attributes": {"width": math.ceil(math.log2(float(depth)))}
         }
         comparator_area = self.comparator_estimate_area(comparator_interface)
         # register file access is naively modeled as vector access of registers
@@ -526,7 +562,7 @@ class AladdinAreaQueires:
         return reg_area
 
     def FIFO_estimate_area(self, interface):
-        datawidth = interface["attributes"]["datawidth"]
+        datawidth = interface["attributes"]["width"]
         depth = interface["attributes"]["depth"]
         if depth == 0:
             return 0
@@ -535,7 +571,7 @@ class AladdinAreaQueires:
         reg_area = AladdinAreaQueires.query_csv_area_using_latency(
             interface, csv_file_path
         )
-        comparator_interface = {"attributes": {"datawidth": math.log2(float(depth))}}
+        comparator_interface = {"attributes": {"width": math.log2(float(depth))}}
         comparator_area = self.comparator_estimate_area(comparator_interface)
         area = reg_area * datawidth + comparator_area
         return area
@@ -543,7 +579,7 @@ class AladdinAreaQueires:
     def crossbar_estimate_area(self, interface):
         n_inputs = interface["attributes"]["n_inputs"]
         n_outputs = interface["attributes"]["n_outputs"]
-        datawidth = interface["attributes"]["datawidth"]
+        datawidth = interface["attributes"]["width"]
         this_dir, this_filename = os.path.split(__file__)
         csv_file_path = os.path.join(this_dir, "data/crossbar.csv")
         csv_area = AladdinAreaQueires.query_csv_area_using_latency(
@@ -563,7 +599,7 @@ class AladdinAreaQueires:
         return energy
 
     def comparator_estimate_area(self, interface):
-        datawidth = interface["attributes"]["datawidth"]
+        datawidth = interface["attributes"]["width"]
         this_dir, this_filename = os.path.split(__file__)
         csv_file_path = os.path.join(this_dir, "data/comparator.csv")
         csv_area = AladdinAreaQueires.query_csv_area_using_latency(
@@ -592,7 +628,7 @@ class AladdinAreaQueires:
 
     def intadder_estimate_area(self, interface):
         this_dir, this_filename = os.path.split(__file__)
-        nbit = interface["attributes"]["datawidth"]
+        nbit = interface["attributes"]["width"]
         csv_nbit = 32
         csv_file_path = os.path.join(this_dir, "data/adder.csv")
         area = AladdinAreaQueires.query_csv_area_using_latency(interface, csv_file_path)
@@ -622,7 +658,7 @@ class AladdinAreaQueires:
 
     def intmultiplier_estimate_area(self, interface):
         this_dir, this_filename = os.path.split(__file__)
-        nbit = interface["attributes"]["datawidth"]
+        nbit = interface["attributes"]["width"]
         csv_nbit = 32
         csv_file_path = os.path.join(this_dir, "data/multiplier.csv")
         area = AladdinAreaQueires.query_csv_area_using_latency(interface, csv_file_path)
@@ -657,26 +693,3 @@ class AladdinAreaQueires:
             interface, csv_file_path
         )
         return csv_area
-
-
-# # helper function (if your accelergy version is < 0.2 use this function directly instead of import)
-# def oneD_quadratic_interpolation(desired_x, known):
-#     """
-#     utility function that performs 1D linear interpolation with a known energy value
-#     :param desired_x: integer value of the desired attribute/argument
-#     :param known: list of dictionary [{x: <value>, y: <energy>}]
-#
-#     :return energy value with desired attribute/argument
-#
-#     """
-#     # assume E = ax^2 + c where x is a hardware attribute
-#     ordered_list = []
-#     if known[1]['x'] < known[0]['x']:
-#         ordered_list.append(known[1])
-#         ordered_list.append(known[0])
-#     else:
-#         ordered_list = known
-#
-#     slope = (known[1]['y'] - known[0]['y']) / (known[1]['x']**2 - known[0]['x']**2)
-#     desired_energy = slope * (desired_x**2 - ordered_list[0]['x']**2) + ordered_list[0]['y']
-#     return desired_energy
