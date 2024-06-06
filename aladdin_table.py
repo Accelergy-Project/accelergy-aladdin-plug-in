@@ -507,10 +507,14 @@ class AladdinAreaQueires:
         # there are only two types of energy in Aladdin tables
         with open(csv_file_path) as csv_file:
             reader = csv.DictReader(csv_file)
-            for row in reader:
+            rows = [row for row in reader]
+            for row in rows:
                 if row["latency(ns)"] == str(latency * 1e-9):
                     area = float(row["area(um^2)"])
                     break
+            else:
+                area = float(rows[0]["area(um^2)"])
+                latency = float(rows[0]["latency(ns)"]) * 1e-9
         return area
 
     def SRAM_estimate_area(self, interface):
