@@ -159,7 +159,7 @@ class AladdinTable(AccelergyPlugIn):
     @staticmethod
     def query_csv_using_latency(interface, csv_file_path):
         # default latency for Aladdin estimation is
-        global_cycle_seconds = interface["attributes"]["global_cycle_seconds"]
+        global_cycle_seconds = interface["attributes"].get("global_cycle_seconds", 5e-9)
         latency = global_cycle_seconds * interface["arguments"]["action_latency_cycles"]
         latency = math.ceil(latency * 1e9) / 1e9
         if latency > 10e-9:
@@ -498,7 +498,7 @@ class AladdinAreaQueires:
     @staticmethod
     def query_csv_area_using_latency(interface, csv_file_path):
         # default latency for Aladdin estimation is
-        latency = interface["attributes"]["global_cycle_seconds"]
+        latency = interface["attributes"].get("global_cycle_seconds", 5e-9)
         latency = math.ceil(latency * 1e9) / 1e9
         if latency > 10e-9:
             latency = 10e-9
