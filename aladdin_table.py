@@ -498,8 +498,7 @@ class AladdinAreaQueires:
     @staticmethod
     def query_csv_area_using_latency(interface, csv_file_path):
         # default latency for Aladdin estimation is
-        global_cycle_seconds = interface["attributes"]["global_cycle_seconds"]
-        latency = global_cycle_seconds * interface["arguments"]["action_latency_cycles"]
+        latency = interface["attributes"]["global_cycle_seconds"]
         latency = math.ceil(latency * 1e9) / 1e9
         if latency > 10e-9:
             latency = 10e-9
