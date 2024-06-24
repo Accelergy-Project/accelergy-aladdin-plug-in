@@ -161,7 +161,7 @@ class AladdinTable(AccelergyPlugIn):
         # default latency for Aladdin estimation is
         global_cycle_seconds = interface["attributes"].get("global_cycle_seconds", 5e-9)
         latency = global_cycle_seconds * interface["arguments"]["action_latency_cycles"]
-        latency = math.ceil(latency * 1e9) / 1e9
+        latency = math.ceil(latency * 1e9) / 1e9 if latency > 0.75e-9 else 0.5e-9
         if latency > 10e-9:
             latency = 10e-9
         elif latency > 6e-9:
@@ -176,7 +176,7 @@ class AladdinTable(AccelergyPlugIn):
             reader = csv.DictReader(csv_file)
             rows = [row for row in reader]
             for row in rows:
-                if row["latency(ns)"] == str(latency * 1e-9):
+                if row["latency(ns)"] == f"{(latency * 1e9):g}":
                     energy = float(row[action_name])
                     break
             else:
@@ -499,7 +499,7 @@ class AladdinAreaQueires:
     def query_csv_area_using_latency(interface, csv_file_path):
         # default latency for Aladdin estimation is
         latency = interface["attributes"].get("global_cycle_seconds", 5e-9)
-        latency = math.ceil(latency * 1e9) / 1e9
+        latency = math.ceil(latency * 1e9) / 1e9 if latency > 0.75e-9 else 0.5e-9
         if latency > 10e-9:
             latency = 10e-9
         elif latency > 6e-9:
@@ -509,7 +509,7 @@ class AladdinAreaQueires:
             reader = csv.DictReader(csv_file)
             rows = [row for row in reader]
             for row in rows:
-                if row["latency(ns)"] == str(latency * 1e-9):
+                if row["latency(ns)"] == f"{(latency * 1e9):g}":
                     area = float(row["area(um^2)"])
                     break
             else:
